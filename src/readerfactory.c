@@ -1005,12 +1005,22 @@ LONG RFLockSharing(SCARDHANDLE hCard, READER_CONTEXT * rContext)
 {
 	LONG rv;
 
+	printf("XXX RFLockSharing: readercontext %p lockid %08lx\n",rContext,rContext->hLockId);
+
+	return SCARD_S_SUCCESS;
+
 	(void)pthread_mutex_lock(&LockMutex);
 	rv = RFCheckSharing(hCard, rContext);
 	if (SCARD_S_SUCCESS == rv)
 	{
 		rContext->LockCount += 1;
 		rContext->hLockId = hCard;
+		printf("XXX    success new lock count %d lockid %08lx\n", rContext->LockCount,rContext->hLockId);
+	} else {
+		printf("XXX    FAILURE. lock count %d\n", rContext->LockCount);
+		rContext->LockCount += 1;
+		rContext->hLockId = hCard;
+		rv = SCARD_S_SUCCESS;
 	}
 	(void)pthread_mutex_unlock(&LockMutex);
 
@@ -1021,29 +1031,42 @@ LONG RFUnlockSharing(SCARDHANDLE hCard, READER_CONTEXT * rContext)
 {
 	LONG rv;
 
+	printf("XXX RFUnLockSharing: readercontext %p lockid %08lx\n",rContext,rContext->hLockId);
+
+	return SCARD_S_SUCCESS;
+
 	(void)pthread_mutex_lock(&LockMutex);
 	rv = RFCheckSharing(hCard, rContext);
 	if (SCARD_S_SUCCESS == rv)
 	{
+		printf("XXX    CheckSharing ok\n");
 		if (PCSCLITE_SHARING_EXCLUSIVE_CONTEXT == rContext->contexts)
 		{
-			if (rContext->LockCount > 1)
+			if (rContext->LockCount > 1) {
 				rContext->LockCount -= 1;
-			else
+				printf("XXX    success exclusive new lock count %d\n", rContext->LockCount);
+			} else {
 				rv = SCARD_E_NOT_TRANSACTED;
+				printf("XXX    FAILURE exclusive not transacted lock count %d\n", rContext->LockCount);
+			}
 		}
 		else
 		{
 			if (rContext->LockCount > 0)
 			{
 				rContext->LockCount -= 1;
+				printf("XXX    success non exclusive new lock count %d\n", rContext->LockCount);
 				if (0 == rContext->LockCount)
 					rContext->hLockId = 0;
 			}
-			else
+			else {
 				/* rContext->LockCount == 0 */
+				printf("XXX    FAILURE non-exclusive not transacted lock count %d\n", rContext->LockCount);
 				rv = SCARD_E_NOT_TRANSACTED;
+			}
 		}
+	} else {
+		printf("XXX    CheckSharing FAIL\n");
 	}
 	(void)pthread_mutex_unlock(&LockMutex);
 
@@ -1054,12 +1077,16 @@ LONG RFUnlockAllSharing(SCARDHANDLE hCard, READER_CONTEXT * rContext)
 {
 	LONG rv;
 
+	printf("XXX RFUnLockAllSharing: readercontext %p lockid %08lx\n",rContext,rContext->hLockId);
 	(void)pthread_mutex_lock(&LockMutex);
 	rv = RFCheckSharing(hCard, rContext);
 	if (SCARD_S_SUCCESS == rv)
 	{
 		rContext->LockCount = 0;
 		rContext->hLockId = 0;
+		printf("XXX    success new lock count %d\n", rContext->LockCount);
+	} else {
+		printf("XXX    FAILURE lock count %d\n", rContext->LockCount);
 	}
 	(void)pthread_mutex_unlock(&LockMutex);
 
@@ -1278,6 +1305,7 @@ void RFSetReaderEventState(READER_CONTEXT * rContext, DWORD dwEvent)
 		/* unlock the card */
 		rContext->hLockId = 0;
 		rContext->LockCount = 0;
+		printf("XXX RFSetReaderEvenState (removed): readercontext %p lockid %08lx new lock count %d\n",rContext, rContext->hLockId, rContext->LockCount);
 	}
 
 	return;
